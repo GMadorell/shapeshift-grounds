@@ -37,6 +37,23 @@ final class SoundMessageCreatorSpec
 
       result.isRight shouldBe true
     }
+
+    "fail when the conversation does not exist" in {
+      shouldNotFindConversationResponse()
+
+      val result = creator.createSoundMessage().futureValue
+      result.isLeft shouldBe true
+      result.leftMap(_ shouldBe SoundConversationNotFound)
+    }
+
+    "fail when the conversation members do not exist" in {
+      shouldFindConversationResponse(s"productId-${Random.nextInt()}")
+      shouldNotFindConversationMembers()
+
+      val result = creator.createSoundMessage().futureValue
+      result.isLeft shouldBe true
+      result.leftMap(_ shouldBe SoundConversationMembersNotFound)
+    }
   }
 
   def shouldInsertSoundMessage(soundMessage: SoundMessage): Unit =
@@ -49,7 +66,7 @@ final class SoundMessageCreatorSpec
     (conversationRepository.find _)
       .expects()
       .once()
-      .returning(Future.successful(ConversationResponse(productId).asRight[DomainError]))
+      .returning(Future.successful(ConversationResponse(productId).asRight[ConversationError]))
 
   def shouldNotFindConversationResponse(): Unit =
     (conversationRepository.find _)
@@ -61,8 +78,8 @@ final class SoundMessageCreatorSpec
     (conversationMembersRepository.find _)
       .expects()
       .once()
-      .returning(
-        Future.successful(ConversationMembersResponse(sellerId, buyerId).asRight[DomainError]))
+      .returning(Future.successful(
+        ConversationMembersResponse(sellerId, buyerId).asRight[ConversationMembersError]))
 
   def shouldNotFindConversationMembers(): Unit =
     (conversationMembersRepository.find _)

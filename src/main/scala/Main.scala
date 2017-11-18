@@ -5,7 +5,6 @@ import cats.implicits._
 
 /*
  * @TODO
- * - assume repos return eithers of different error types -> be able to transform those errors into the sound domain
  * - be able to recover from errors and return default values -> grab an error and return a default dummy user when the user isn't found
  */
 
@@ -14,12 +13,12 @@ final class SoundMessageCreator(
     conversationRepository: ConversationRepository,
     conversationMembersRepository: ConversationMembersRepository)(implicit ec: ExecutionContext) {
 
-  type FutureResult[A] = EitherT[Future, DomainError, A]
+  type FutureResult[A] = EitherT[Future, SoundMessageError, A]
 
-  def createSoundMessage(): Future[Either[DomainError, Unit]] =
-    doSomethingUsefulEitherT().value
+  def createSoundMessage(): Future[Either[SoundMessageError, Unit]] =
+    createSoundMessageT().value
 
-  private def doSomethingUsefulEitherT(): FutureResult[Unit] =
+  private def createSoundMessageT(): FutureResult[Unit] =
     for {
       conversationResponse        <- searchConversation()
       conversationMembersResponse <- searchConversationMembers()
@@ -29,10 +28,14 @@ final class SoundMessageCreator(
     } yield createMessageResult
 
   private def searchConversation(): FutureResult[ConversationResponse] =
-    EitherT(conversationRepository.find())
+    EitherT(conversationRepository.find()).leftMap {
+      case ConversationNotFound => SoundConversationNotFound
+    }
 
   private def searchConversationMembers(): FutureResult[ConversationMembersResponse] =
-    EitherT(conversationMembersRepository.find())
+    EitherT(conversationMembersRepository.find()).leftMap {
+      case ConversationMembersNotFound => SoundConversationMembersNotFound
+    }
 
   private def createMessage(productId: String,
                             sellerId: String,
@@ -40,7 +43,7 @@ final class SoundMessageCreator(
     EitherT(
       soundMessageRepository
         .insert(SoundMessage(productId, sellerId, buyerId))
-        .map(_.asRight[DomainError]))
+        .map(_.asRight[SoundMessageError]))
 }
 
 case class SoundMessage(productId: String, sellerId: String, buyerId: String)
@@ -50,16 +53,20 @@ trait SoundMessageRepository {
 
 case class ConversationResponse(productId: String)
 trait ConversationRepository {
-  def find(): Future[Either[DomainError, ConversationResponse]]
+  def find(): Future[Either[ConversationError, ConversationResponse]]
 }
 
 case class ConversationMembersResponse(sellerId: String, buyerId: String)
 trait ConversationMembersRepository {
-  def find(): Future[Either[DomainError, ConversationMembersResponse]]
+  def find(): Future[Either[ConversationMembersError, ConversationMembersResponse]]
 }
 
-abstract class DomainError
+sealed trait ConversationError
+case object ConversationNotFound extends ConversationError
 
-case object ConversationNotFound extends DomainError
+sealed trait ConversationMembersError
+case object ConversationMembersNotFound extends ConversationMembersError
 
-case object ConversationMembersNotFound extends DomainError
+sealed trait SoundMessageError
+case object SoundConversationNotFound        extends SoundMessageError
+case object SoundConversationMembersNotFound extends SoundMessageError
