@@ -14,10 +14,10 @@ final class SoundMessageCreatorSpec
 
   private implicit val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
-  val soundMessageRepository: SoundMessageRepository = mock[SoundMessageRepository]
-  val conversationRepository: ConversationRepository = mock[ConversationRepository]
-  val conversationMembersRepository: ConversationMembersRepository =
-    mock[ConversationMembersRepository]
+  val soundMessageRepository: SoundMessageRepository[Future] = mock[SoundMessageRepository[Future]]
+  val conversationRepository: ConversationRepository[Future] = mock[ConversationRepository[Future]]
+  val conversationMembersRepository: ConversationMembersRepository[Future] =
+    mock[ConversationMembersRepository[Future]]
 
   val creator = new SoundMessageCreator(soundMessageRepository,
                                         conversationRepository,

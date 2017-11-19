@@ -1,5 +1,6 @@
 import scala.concurrent.{ExecutionContext, Future}
 
+import cats.Monad
 import cats.data.EitherT
 import cats.implicits._
 
@@ -8,17 +9,17 @@ import cats.implicits._
  * - be able to recover from errors and return default values -> grab an error and return a default dummy user when the user isn't found
  */
 
-final class SoundMessageCreator(
-    soundMessageRepository: SoundMessageRepository,
-    conversationRepository: ConversationRepository,
-    conversationMembersRepository: ConversationMembersRepository)(implicit ec: ExecutionContext) {
+final class SoundMessageCreator[P[_]: Monad](
+    soundMessageRepository: SoundMessageRepository[P],
+    conversationRepository: ConversationRepository[P],
+    conversationMembersRepository: ConversationMembersRepository[P]) {
 
-  type FutureResult[A] = EitherT[Future, SoundMessageError, A]
+  private type Result[A] = EitherT[P, SoundMessageError, A]
 
-  def createSoundMessage(): Future[Either[SoundMessageError, Unit]] =
+  def createSoundMessage(): P[Either[SoundMessageError, Unit]] =
     createSoundMessageT().value
 
-  private def createSoundMessageT(): FutureResult[Unit] =
+  private def createSoundMessageT(): Result[Unit] =
     for {
       conversationResponse        <- searchConversation()
       conversationMembersResponse <- searchConversationMembers()
@@ -27,19 +28,17 @@ final class SoundMessageCreator(
                                            conversationMembersResponse.buyerId)
     } yield createMessageResult
 
-  private def searchConversation(): FutureResult[ConversationResponse] =
+  private def searchConversation(): Result[ConversationResponse] =
     EitherT(conversationRepository.find()).leftMap {
       case ConversationNotFound => SoundConversationNotFound
     }
 
-  private def searchConversationMembers(): FutureResult[ConversationMembersResponse] =
+  private def searchConversationMembers(): Result[ConversationMembersResponse] =
     EitherT(conversationMembersRepository.find()).leftMap {
       case ConversationMembersNotFound => SoundConversationMembersNotFound
     }
 
-  private def createMessage(productId: String,
-                            sellerId: String,
-                            buyerId: String): FutureResult[Unit] =
+  private def createMessage(productId: String, sellerId: String, buyerId: String): Result[Unit] =
     EitherT(
       soundMessageRepository
         .insert(SoundMessage(productId, sellerId, buyerId))
@@ -47,18 +46,18 @@ final class SoundMessageCreator(
 }
 
 case class SoundMessage(productId: String, sellerId: String, buyerId: String)
-trait SoundMessageRepository {
-  def insert(soundMessage: SoundMessage): Future[Unit]
+trait SoundMessageRepository[P[_]] {
+  def insert(soundMessage: SoundMessage): P[Unit]
 }
 
 case class ConversationResponse(productId: String)
-trait ConversationRepository {
-  def find(): Future[Either[ConversationError, ConversationResponse]]
+trait ConversationRepository[P[_]] {
+  def find(): P[Either[ConversationError, ConversationResponse]]
 }
 
 case class ConversationMembersResponse(sellerId: String, buyerId: String)
-trait ConversationMembersRepository {
-  def find(): Future[Either[ConversationMembersError, ConversationMembersResponse]]
+trait ConversationMembersRepository[P[_]] {
+  def find(): P[Either[ConversationMembersError, ConversationMembersResponse]]
 }
 
 sealed trait ConversationError
